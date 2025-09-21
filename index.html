@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Calculateur points - BTM83</title>
+
+<!-- PWA manifest & theme -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b66c3">
+<link rel="apple-touch-icon" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcStLf2-mTzFGFN60u5eACDfplopxFwkIHAQ9HHrp9-uSQ&s=10">
+
+<style>
+:root{
+  --bg:#f6f8fa; --card:#fff; --accent:#0b66c3; --muted:#6b7280;
+  --green:#0f9d58; --red:#d9534f; font-family: Inter, Roboto, Arial, sans-serif;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);margin:0;padding:14px;-webkit-font-smoothing:antialiased;}
+.app{max-width:1000px;margin:0 auto;}
+header{display:flex;gap:12px;align-items:center;margin-bottom:12px;}
+header img{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid rgba(0,0,0,0.06);}
+h1{font-size:18px;margin:0;}
+.card{background:var(--card);padding:14px;border-radius:10px;box-shadow:0 6px 16px rgba(14,30,37,0.06);margin-bottom:12px;}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.btn{background:var(--accent);color:#fff;padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:600;}
+.btn.secondary{background:transparent;color:var(--accent);border:1px solid rgba(11,102,195,0.12);}
+.btn.ghost{background:transparent;border:1px dashed rgba(0,0,0,0.06);color:var(--muted);}
+.matches{margin-top:12px;display:grid;gap:12px;}
+.match{display:grid;grid-template-columns:1fr 120px;gap:12px;padding:12px;border-radius:8px;border:1px solid rgba(0,0,0,0.04);align-items:start;}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+label{font-size:13px;color:var(--muted);min-width:80px;}
+input[type=number],select{padding:8px 10px;border-radius:8px;border:1px solid #e6e9ee;font-size:14px;min-width:120px;}
+input.full, select.full{min-width:0;flex:1;}
+.muted{color:var(--muted);font-size:13px;}
+.details{font-size:13px;color:var(--muted);margin-top:8px;padding:8px;border-radius:8px;background:#fbfcfe;border:1px solid #f0f4fb;display:none;}
+.details.visible{display:block;}
+.points{font-weight:700;font-size:16px;}
+.positive{color:var(--green);}
+.negative{color:var(--red);}
+.total{font-weight:800;font-size:18px;}
+.remove{background:transparent;border:0;color:var(--red);cursor:pointer;font-weight:700;}
+@media(max-width:880px){ .match{grid-template-columns:1fr} label{min-width:60px} }
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcStLf2-mTzFGFN60u5eACDfplopxFwkIHAQ9HHrp9-uSQ&s=10" alt="BTM83">
+  <div>
+    <h1>Calculateur de points — BTM83</h1>
+    <div class="muted">Barème officiel : cote plus haute = meilleur joueur.</div>
+  </div>
+</header>
+
+<div class="card">
+  <div class="controls">
+    <button id="addMatch" class="btn">+ Ajouter un match</button>
+    <button id="calc" class="btn secondary">Calculer total</button>
+    <button id="clear" class="btn secondary">Réinitialiser</button>
+    <button id="toggleDebug" class="btn ghost">Détails</button>
+    <div style="margin-left:auto;" class="muted">Matchs : <span id="matchCount">0</span></div>
+  </div>
+  <div class="matches" id="matches"></div>
+  <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
+    <div class="muted">Somme de tous les gains/pertes :</div>
+    <div class="total" id="totalPoints">0 pts</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="muted">Rappel :</div>
+  <ul class="muted">
+    <li>Table de points officielle FFBaD.</li>
+    <li>Plus la cote est élevée, meilleur est le joueur.</li>
+  </ul>
+</div>
+
+<footer style="text-align:center" class="muted">BTM83 — Calculateur local</footer>
+</div>
+
+<script>
+// ---- Service worker registration pour PWA ----
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(()=>console.log('Service Worker enregistré'));
+}
+
+// ---- Point Table ----
+const pointTable = [
+  {min:0,    max:49,   wh:20, lh:-14, wl:20,  ll:-14},
+  {min:50,   max:99,   wh:17, lh:-13, wl:23,  ll:-15},
+  {min:100,  max:199,  wh:14, lh:-12, wl:26,  ll:-16},
+  {min:200,  max:299,  wh:11, lh:-10, wl:32,  ll:-18},
+  {min:300,  max:399,  wh:9,  lh:-7,  wl:38,  ll:-20},
+  {min:400,  max:599,  wh:7,  lh:-4,  wl:43,  ll:-22},
+  {min:600,  max:799,  wh:5,  lh:-1,  wl:53,  ll:-24},
+  {min:800,  max:999,  wh:4,  lh:0,   wl:61,  ll:-26},
+  {min:1000, max:Infinity, wh:3, lh:0,  wl:70,  ll:-28}
+];
+
+// ---- DOM ----
+const matchesEl = document.getElementById('matches');
+const addBtn = document.getElementById('addMatch');
+const calcBtn = document.getElementById('calc');
+const clearBtn = document.getElementById('clear');
+const totalPointsEl = document.getElementById('totalPoints');
+const matchCountEl = document.getElementById('matchCount');
+const toggleDebugBtn = document.getElementById('toggleDebug');
+
+let matchIdCounter=0;
+let debugVisible=false;
+
+// ---- Fonctions ----
+function createMatchCard(){
+  const id=++matchIdCounter;
+  const wrapper=document.createElement('div');
+  wrapper.className='match'; wrapper.dataset.id=id;
+
+  wrapper.innerHTML=`
+  <div>
+    <div class="row" style="margin-bottom:6px">
+      <label>Discipline</label>
+      <select class="discipline small">
+        <option value="simple">Simple</option>
+        <option value="double">Double</option>
+        <option value="mixte">Mixte</option>
+      </select>
+      <label>Résultat</label>
+      <select class="resultSelect small">
+        <option value="win">Vous gagnez</option>
+        <option value="loss">Vous perdez</option>
+      </select>
+    </div>
+    <div class="row simple-fields" style="margin-bottom:6px">
+      <label>Votre cote</label>
+      <input type="number" class="yourCote small" value="1000" min="0">
+      <label>Adversaire</label>
+      <input type="number" class="oppCote small" value="1000" min="0">
+    </div>
+    <div class="row pair-fields" style="display:none;gap:6px;margin-bottom:6px">
+      <div style="flex:1;display:flex;gap:6px;align-items:center">
+        <label>Votre paire</label>
+        <input class="yourCoteP1 full" type="number" value="1000" min="0">
+        <input class="yourCoteP2 full" type="number" value="1000" min="0">
+      </div>
+      <div style="flex:1;display:flex;gap:6px;align-items:center">
+        <label>Adversaires</label>
+        <input class="oppCoteP1 full" type="number" value="1000" min="0">
+        <input class="oppCoteP2 full" type="number" value="1000" min="0">
+      </div>
+    </div>
+    <div class="row" style="align-items:flex-end">
+      <div class="muted">Points ce match :</div>
+      <div class="points" data-points>0 pts</div>
+      <button class="btn secondary showDetails" style="margin-left:6px">Afficher</button>
+    </div>
+    <div class="details" data-details>
+      <div><strong>Détails:</strong></div>
+      <div>Votre cote: <span data-your>1000</span></div>
+      <div>Adversaire: <span data-opp>1000</span></div>
+      <div>Écart: <span data-ecart>0</span></div>
+      <div>Tranche: <span data-tranche>-</span></div>
+      <div>Valeur: <span data-valeur>0</span></div>
+    </div>
+  </div>
+  <div style="text-align:right">
+    <button class="remove">Supprimer</button><br>
+    <div class="muted" style="margin-top:8px;font-size:12px">ID: ${id}</div>
+  </div>
+  `;
+
+  const disciplineEl = wrapper.querySelector('.discipline');
+  const removeBtn = wrapper.querySelector('.remove');
+  const showDetailsBtn = wrapper.querySelector('.showDetails');
+
+  disciplineEl.addEventListener('change', ()=>{
+    const d=disciplineEl.value;
+    wrapper.querySelector('.simple-fields').style.display=(d==='simple'?'flex':'none');
+    wrapper.querySelector('.pair-fields').style.display=(d!=='simple'?'flex':'none');
+    calculateMatch(wrapper);
+  });
+
+  removeBtn.addEventListener('click', ()=>{ wrapper.remove(); calculateTotal(); });
+  showDetailsBtn.addEventListener('click', ()=>{
+    wrapper.querySelector('[data-details]').classList.toggle('visible');
+  });
+
+  wrapper.querySelectorAll('input,select').forEach(inp=>{
+    inp.addEventListener('input', ()=> calculateMatch(wrapper));
+    inp.addEventListener('change', ()=> calculateMatch(wrapper));
+  });
+
+  matchesEl.appendChild(wrapper);
+  calculateMatch(wrapper);
+}
+
+function findRow(ecart){ return pointTable.find(r=>ecart>=r.min && ecart<=r.max)||pointTable[pointTable.length-1]; }
+
+function calculateMatch(wrapper){
+  const discipline=wrapper.querySelector('.discipline').value;
+  const result=wrapper.querySelector('.resultSelect').value;
+  const pointsEl=wrapper.querySelector('[data-points]');
+  const details=wrapper.querySelector('[data-details]');
+  let yourAvg=0, oppAvg=0;
+
+  if(discipline==='simple'){
+    yourAvg=parseFloat(wrapper.querySelector('.yourCote').value)||0;
+    oppAvg=parseFloat(wrapper.querySelector('.oppCote').value)||0;
+  } else{
+    const y1=parseFloat(wrapper.querySelector('.yourCoteP1').value)||0;
+    const y2=parseFloat(wrapper.querySelector('.yourCoteP2').value)||0;
+    const o1=parseFloat(wrapper.querySelector('.oppCoteP1').value)||0;
+    const o2=parseFloat(wrapper.querySelector('.oppCoteP2').value)||0;
+    yourAvg=(y1+y2)/2; oppAvg=(o1+o2)/2;
+  }
+
+  const ecart=Math.round(Math.abs(yourAvg-oppAvg));
+  const row=findRow(ecart);
+  const youBetter=yourAvg>=oppAvg;
+
+  let pts=0,label='';
+  if(youBetter){
+    label=result==='win'?'Victoire du mieux classé':'Défaite du mieux classé';
+    pts=result==='win'?row.wh:row.lh;
+  } else{
+    label=result==='win'?'Victoire du moins bien classé':'Défaite du moins bien classé';
+    pts=result==='win'?row.wl:row.ll;
+  }
+
+  pointsEl.textContent=(pts>=0?'+':'')+pts+' pts';
+  pointsEl.classList.toggle('positive', pts>0);
+  pointsEl.classList.toggle('negative', pts<0);
+  wrapper.dataset.matchPoints=pts;
+
+  if(details){
+    details.querySelector('[data-your]').textContent=Math.round(yourAvg*100)/100;
+    details.querySelector('[data-opp]').textContent=Math.round(oppAvg*100)/100;
+    details.querySelector('[data-ecart]').textContent=ecart;
+    details.querySelector('[data-tranche]').textContent=`${row.min}–${isFinite(row.max)?row.max:'∞'}`;
+    details.querySelector('[data-valeur]').textContent=`${label} → ${pts} pts`;
+    details.classList.toggle('visible', debugVisible);
+  }
+  calculateTotal();
+}
+
+function calculateTotal(){
+  let total=0;
+  Array.from(matchesEl.children).forEach(ch=>{ total+=Number(ch.dataset.matchPoints)||0; });
+  totalPointsEl.textContent=(total>=0?'+':'')+total+' pts';
+  totalPointsEl.classList.toggle('positive', total>0);
+  totalPointsEl.classList.toggle('negative', total<0);
+  matchCountEl.textContent=matchesEl.children.length;
+}
+
+// ---- Boutons ----
+addBtn.addEventListener('click', createMatchCard);
+calcBtn.addEventListener('click', calculateTotal);
+clearBtn.addEventListener('click', ()=>{ matchesEl.innerHTML=''; matchIdCounter=0; calculateTotal(); });
+toggleDebugBtn.addEventListener('click', ()=>{ debugVisible=!debugVisible; Array.from(matchesEl.children).forEach(c=>{ c.querySelector('[data-details]').classList.toggle('visible', debugVisible); }); });
+
+// ---- Initial ----
+createMatchCard();
+</script>
+</body>
+</html>
