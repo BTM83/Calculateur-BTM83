@@ -1,0 +1,20 @@
+{
+  "name": "Calculateur BTM83",
+  "short_name": "BTM83",
+  "start_url": "./badminton-btm83.html",
+  "display": "standalone",
+  "background_color": "#f6f8fa",
+  "theme_color": "#0b66c3",
+  "icons": [
+    {
+      "src": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcStLf2-mTzFGFN60u5eACDfplopxFwkIHAQ9HHrp9-uSQ&s=10",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcStLf2-mTzFGFN60u5eACDfplopxFwkIHAQ9HHrp9-uSQ&s=10",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
